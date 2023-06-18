@@ -66,16 +66,11 @@ public:
 	BOOL HitTestInRect(const D2D1_RECT_F& rect, const D2D1::Matrix3x2F& global) {
 		D2D1_RECT_F rect2;
 		pRoundedRectangleGeometry->GetBounds(local * global, &rect2);
-		if (rect.left <= rect2.left && rect2.left <= rect.right &&
+		return (rect.left <= rect2.left && rect2.left <= rect.right &&
 			rect.left <= rect2.right && rect2.right <= rect.right &&
 			rect.top <= rect2.top && rect2.top <= rect.bottom &&
 			rect.top <= rect2.bottom && rect2.bottom <= rect.bottom
-			) {
-			return TRUE;
-		}
-		else {
-			return FALSE;
-		}
+			);
 	}
 };
 
