@@ -33,7 +33,7 @@ public:
 	ID2D1RoundedRectangleGeometry* pRoundedRectangleGeometry;
 	CObject(ID2D1Factory* m_pD2DFactory) : bSelected(FALSE) {
 		local = D2D1::Matrix3x2F::Identity();
-		D2D1_ROUNDED_RECT roundedRect = D2D1::RoundedRect(D2D1::RectF(0, 0, 100, 100), 10, 10);
+		D2D1_ROUNDED_RECT roundedRect = D2D1::RoundedRect(D2D1::RectF(-50, -50, 50, 50), 10, 10);
 		m_pD2DFactory->CreateRoundedRectangleGeometry(roundedRect, &pRoundedRectangleGeometry);
 	}
 	~CObject() {
@@ -63,6 +63,20 @@ public:
 	BOOL GetSelected() {
 		return bSelected;
 	}
+	BOOL HitTestInRect(const D2D1_RECT_F& rect, const D2D1::Matrix3x2F& global) {
+		D2D1_RECT_F rect2;
+		pRoundedRectangleGeometry->GetBounds(local * global, &rect2);
+		if (rect.left <= rect2.left && rect2.left <= rect.right &&
+			rect.left <= rect2.right && rect2.right <= rect.right &&
+			rect.top <= rect2.top && rect2.top <= rect.bottom &&
+			rect.top <= rect2.bottom && rect2.bottom <= rect.bottom
+			) {
+			return TRUE;
+		}
+		else {
+			return FALSE;
+		}
+	}
 };
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -76,7 +90,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	static D2D1_POINT_2F ptDragObject;
 	static POINT ptDragStart;
 	static POINT ptDragEnd;
-	static ID2D1RoundedRectangleGeometry* pRoundedRectangleGeometry;
 	static HCURSOR hCursorOpenHand;
 	static HCURSOR hCursorClosedHand;
 	static BOOL bRectangleSelectMode = FALSE;
@@ -90,10 +103,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			hCursorOpenHand = LoadCursor(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDC_OPENHAND));
 			hCursorClosedHand = LoadCursor(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDC_CLOSEDHAND));
 			HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &m_pD2DFactory);
-			if (SUCCEEDED(hr)) {
-				D2D1_ROUNDED_RECT roundedRect = D2D1::RoundedRect(D2D1::RectF(0, 0, 100, 100), 10, 10);
-				hr = m_pD2DFactory->CreateRoundedRectangleGeometry(roundedRect, &pRoundedRectangleGeometry);
-			}
 			if (FAILED(hr)) {
 				MessageBox(hWnd, L"Direct2D の初期化に失敗しました。", 0, 0);
 			}
@@ -185,6 +194,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			else if (bRectangleSelectMode) {
 				ptDragEnd.x = x;
 				ptDragEnd.y = y;
+
+				for (auto& i : objectlist) {
+					D2D1_RECT_F rect;
+					rect.left = (FLOAT)min(ptDragStart.x, ptDragEnd.x);
+					rect.top = (FLOAT)min(ptDragStart.y, ptDragEnd.y);
+					rect.right = (FLOAT)max(ptDragStart.x, ptDragEnd.x);
+					rect.bottom = (FLOAT)max(ptDragStart.y, ptDragEnd.y);
+					if (i->HitTestInRect(rect, matrix) == TRUE) {
+						i->SetSelected(TRUE);
+					}
+					else {
+						i->SetSelected(FALSE);
+					}
+				}
+
 				InvalidateRect(hWnd, 0, 0);
 			} 
 			else {
@@ -281,7 +305,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			delete i;
 		}
 		objectlist.clear();
-		SafeRelease(&pRoundedRectangleGeometry);
 		SafeRelease(&m_pD2DFactory);
 		SafeRelease(&m_pRenderTarget);
 		SafeRelease(&m_pNormalBrush);
