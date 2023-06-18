@@ -79,6 +79,11 @@ public:
 	}
 };
 
+struct DRAG_OBJECT {
+	CObject* pObject;
+	D2D1_POINT_2F ptDragObject;
+};
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	static ID2D1Factory* m_pD2DFactory;
@@ -87,7 +92,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	static ID2D1SolidColorBrush* m_pSelectedBrush;
 	static D2D1::Matrix3x2F matrix;
 	static BOOL bDrag = FALSE;
-	static D2D1_POINT_2F ptDragObject;
 	static POINT ptDragStart;
 	static POINT ptDragEnd;
 	static HCURSOR hCursorOpenHand;
@@ -95,7 +99,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	static BOOL bRectangleSelectMode = FALSE;
 	static ID2D1StrokeStyle* pStrokeStyle;
 	static std::vector<CObject*> objectlist;
-	static std::vector<CObject*> dragobjectlist;
+	static std::vector<DRAG_OBJECT> dragobjectlist;
 	switch (msg)
 	{
 	case WM_CREATE:
@@ -154,23 +158,50 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			ptDragEnd.x = x;
 			ptDragEnd.y = y;
 			D2D1_POINT_2F pt2 = D2D1::Point2F((FLOAT)x, (FLOAT)y);
-			for (auto i : objectlist) {
-				i->SetSelected(FALSE);
-			}
 			dragobjectlist.clear();
-			for (auto i : objectlist) {
+			bDrag = FALSE;
+			for (auto &i : objectlist) {
 				if (i->HitTest(pt2, matrix)) {
-					ptDragObject = i->GetPosition(); // ドラッグ開始時のオブジェクトの位置を記憶
-					i->SetSelected(TRUE);
-					dragobjectlist.push_back(i);
+					if (!(wParam & MK_CONTROL)) {
+						if (!i->GetSelected()) {
+							for (auto j : objectlist) {
+								j->SetSelected(FALSE);
+							}
+						}
+						i->SetSelected(TRUE);
+					}
+					else {
+						if (i->GetSelected()) {
+							i->SetSelected(FALSE);
+						}
+						else {
+							i->SetSelected(TRUE);
+						}
+					}
+					bDrag = TRUE;
 					break;
 				}
 			}
-			if (dragobjectlist.size() > 0) {
-				bDrag = TRUE;
-				SetCursor(hCursorClosedHand);
-				SetCapture(hWnd);
+			if (bDrag) {
+				for (const auto& i : objectlist) {
+					if (i->GetSelected()) {
+						DRAG_OBJECT dragobject;
+						dragobject.ptDragObject = i->GetPosition(); // ドラッグ開始時のオブジェクトの位置を記憶
+						dragobject.pObject = i;
+						dragobjectlist.push_back(dragobject);
+					}
+				}
+				if (dragobjectlist.size() > 0) {
+					SetCursor(hCursorClosedHand);
+					SetCapture(hWnd);
+				}
+				else {
+					bDrag = FALSE;
+				}
 			} else {
+				for (auto i : objectlist) {
+					i->SetSelected(FALSE);
+				}
 				bRectangleSelectMode = TRUE;
 				SetCapture(hWnd);
 			}
@@ -183,10 +214,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			int y = GET_Y_LPARAM(lParam);
 			if (bDrag) {
 				D2D1_POINT_2F ptObject;
-				ptObject.x = ptDragObject.x + (FLOAT)((x - ptDragStart.x) * 1.0f / matrix.m11);
-				ptObject.y = ptDragObject.y + (FLOAT)((y - ptDragStart.y) * 1.0f / matrix.m11);
 				for (auto& i : dragobjectlist) {
-					i->SetPosition(ptObject);
+					ptObject.x = i.ptDragObject.x + (FLOAT)((x - ptDragStart.x) * 1.0f / matrix.m11);
+					ptObject.y = i.ptDragObject.y + (FLOAT)((y - ptDragStart.y) * 1.0f / matrix.m11);
+					i.pObject->SetPosition(ptObject);
 				}
 				InvalidateRect(hWnd, 0, 0);
 				SetCursor(hCursorClosedHand);
@@ -194,7 +225,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			else if (bRectangleSelectMode) {
 				ptDragEnd.x = x;
 				ptDragEnd.y = y;
-
 				for (auto& i : objectlist) {
 					D2D1_RECT_F rect;
 					rect.left = (FLOAT)min(ptDragStart.x, ptDragEnd.x);
@@ -208,7 +238,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 						i->SetSelected(FALSE);
 					}
 				}
-
 				InvalidateRect(hWnd, 0, 0);
 			} 
 			else {
@@ -274,8 +303,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				m_pRenderTarget->BeginDraw();
 			}
 			m_pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
+			// 選択されていないオブジェクトを描画
 			for (auto i : objectlist) {
-				i->Draw(m_pRenderTarget, i->GetSelected()? m_pSelectedBrush : m_pNormalBrush, matrix);
+				if (i->GetSelected() == FALSE) {
+					i->Draw(m_pRenderTarget, m_pNormalBrush, matrix);
+				}
+			}
+			// 選択されているオブジェクトを描画
+			for (auto i : objectlist) {
+				if (i->GetSelected() == TRUE) {
+					i->Draw(m_pRenderTarget, m_pSelectedBrush, matrix);
+				}
 			}
 			if (bRectangleSelectMode && m_pNormalBrush && pStrokeStyle) {
 				m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
