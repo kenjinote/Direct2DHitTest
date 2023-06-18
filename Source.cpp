@@ -46,7 +46,6 @@ public:
 	void SetPosition(const D2D1_POINT_2F& pt) {
 		local.dx = pt.x * (1.0f / local.m11);
 		local.dy = pt.y * (1.0f / local.m11);
-		//local = D2D1::Matrix3x2F::Translation(pt.x, pt.y);
 	}
 	D2D1_POINT_2F GetPosition() const {
 		return D2D1::Point2F(local.dx, local.dy);
