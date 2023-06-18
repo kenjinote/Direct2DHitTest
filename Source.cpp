@@ -332,7 +332,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance,
 		hInstance,
 		0,
 		NULL,
-		(HBRUSH)(COLOR_WINDOW + 1),
+		NULL,
 		0,
 		szClassName
 	};
